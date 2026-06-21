@@ -1,69 +1,135 @@
-# Prerequisites
-*.d
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-# Precompiled Headers
-*.gch
-*.pch
+const int buttonPin = 2;
 
-# Linker files
-*.ilk
+// Stopwatch
+bool running = false;
+bool confirmMode = false;
 
-# Debugger Files
-*.pdb
+unsigned long startTime = 0;
+unsigned long currentTime = 0;
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-*.so.*
+// Fake-out stage
+int stopStage = 0;
 
+// debounce
+bool lastButtonState = HIGH;
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50;
 
-# Fortran module files
-*.mod
-*.smod
+void setup() {
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+  pinMode(buttonPin, INPUT_PULLUP);
 
-# Executables
-*.exe
-*.out
-*.app
+  lcd.init();
+  lcd.backlight();
 
-# Build directories
-build/
-Build/
-build-*/
+  lcd.setCursor(0,0);
+  lcd.print("Human Stopwatch");
+  lcd.setCursor(0,1);
+  lcd.print("Press Button");
+}
 
-# CMake generated files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-install_manifest.txt
-compile_commands.json
+void loop() {
 
-# Temporary files
-*.tmp
-*.log
-*.bak
-*.swp
+  bool currentButton = digitalRead(buttonPin);
 
-# vcpkg
-vcpkg_installed/
+  if (
+    lastButtonState == HIGH &&
+    currentButton == LOW &&
+    millis() - lastDebounceTime > debounceDelay
+  ) {
 
-# debug information files
-*.dwo
+    lastDebounceTime = millis();
 
-# test output & cache
-Testing/
-.cache/
+    // =========================
+    // START
+    // =========================
+    if (!running) {
+
+      running = true;
+      confirmMode = false;
+      stopStage = 0;
+
+      startTime = millis();
+      lcd.clear();
+    }
+
+    // =========================
+    // STOP ATTEMPT (EVIL MODE)
+    // =========================
+    else {
+
+      stopStage++;
+      confirmMode = true; // hides timer immediately
+
+      if (stopStage == 1) {
+        lcd.clear();
+        lcd.setCursor(6,0);
+        lcd.print("ARE");
+      }
+
+      else if (stopStage == 2) {
+        lcd.clear();
+        lcd.setCursor(4,0);
+        lcd.print("ARE YOU");
+      }
+
+      else if (stopStage == 3) {
+        lcd.clear();
+        lcd.setCursor(5,0);
+        lcd.print("ARE YOU SURE");
+      }
+
+      else if (stopStage == 4) {
+        lcd.clear();
+        lcd.setCursor(1,0);
+        lcd.print("ARE YOU SURE?");
+      }
+
+      else if (stopStage == 5) {
+
+        running = false;
+        confirmMode = false;
+
+        float finalTime = (millis() - startTime) / 1000.0;
+
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("Final Time:");
+        lcd.setCursor(0,1);
+        lcd.print(finalTime, 2);
+        lcd.print(" sec");
+
+        delay(5000);
+
+        lcd.clear();
+        lcd.print("Press Button");
+        stopStage = 0;
+      }
+    }
+  }
+
+  lastButtonState = currentButton;
+
+  // =========================
+  // TIMER DISPLAY
+  // =========================
+  if (running) {
+
+    currentTime = millis() - startTime;
+
+    if (!confirmMode) {
+      lcd.setCursor(0,0);
+      lcd.print("Time:            ");
+
+      lcd.setCursor(6,0);
+      lcd.print(currentTime / 1000.0, 2);
+    }
+
+    // during confirmMode → time is still running but hidden
+  }
+}
